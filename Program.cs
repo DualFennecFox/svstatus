@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.Design;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -21,6 +21,7 @@ namespace svstatus
         {
             public string serverip = "127.0.0.1";
             public int serverport = 25565;
+            public string rconip = "127.0.0.1";
             public int rconport = 25575;
             public ulong statusChannel = 0;
             public ulong chatChannel = 0;
@@ -146,7 +147,18 @@ namespace svstatus
         public static async Task MessageReceived(SocketMessage message)
         {
 
-            if (message.Channel.Id != config.chatChannel || message.Author.IsBot) { return; }
+            if (message.Channel.Id != config.chatChannel) { return; }
+            if (message.Author.IsBot && message.Author.Id != 725129316790173767) { return; }
+
+            string msg = message.Content;
+
+            if (message.Author.Id == 725129316790173767 && message.Embeds.Count != 0) {
+                if (message.Embeds.First().Fields.First().Name == "Escuchando") {
+                msg = message.Embeds.First().Fields.First().Value;
+                msg = msg[..msg.IndexOf("](http")];
+                msg = "Escuchando: " + msg;
+                }
+            }
 
             bool authenticated;
             try
@@ -161,7 +173,7 @@ namespace svstatus
             }
             if (authenticated)
             {
-                await client.ExecuteCommandAsync($"say [{message.Author.Username}]: {message.Content}");
+                await client.ExecuteCommandAsync($"say [{message.Author.Username}]: {msg}");
             }
         }
         private static async Task SlashCommandHandler(SocketSlashCommand command)
@@ -300,9 +312,9 @@ namespace svstatus
             while (true)
             {
                 Thread.Sleep(3000);
-                RconClient client = RconClient.Create(ip, config.rconport);
+                RconClient client = RconClient.Create(config.rconip, config.rconport);
 
-                MineStat ms = new(ip, 25565);
+                MineStat ms = new(config.serverip, 57901);
                 if (address != config.serverip + ":" + config.serverport)
                 {
                     var portBuilder = new EmbedBuilder()
@@ -366,7 +378,7 @@ namespace svstatus
             {
                 timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
             };
-            client = RconClient.Create(ip, config.rconport);
+            client = RconClient.Create(config.rconip, config.rconport);
             while (true)
             {
                 Thread.Sleep(200);
@@ -381,7 +393,7 @@ namespace svstatus
                 }
                 catch
                 {
-                    client = RconClient.Create(ip, config.rconport);
+                    client = RconClient.Create(config.rconip, config.rconport);
                     
                     continue;
                 }
@@ -395,6 +407,8 @@ namespace svstatus
                         started = true;
                     }
                     var status = await client.ExecuteCommandAsync("craftcontrolrcon players");
+
+                    
 
                     PlayerData data = JsonConvert.DeserializeObject<PlayerData>(status.ToString());
 
