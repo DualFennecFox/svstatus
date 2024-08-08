@@ -1,7 +1,8 @@
 {
-  "serverip": "big-proxy.gl.at.ply.gg",
-  "serverport": 18583,
-  "rconport": 25575,
+  "serverip": "five-shadows.gl.at.ply.gg",
+  "serverport": 57901,
+  "rconip": "call-memo.gl.at.ply.gg",
+  "rconport": 57029,
   "statusChannel": 737438835646005268,
   "chatChannel": 737438835646005268
 }
