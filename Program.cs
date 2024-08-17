@@ -30,9 +30,10 @@ namespace svstatus
         public static RconClient client;
         public static string ip = "127.0.0.1";
         public static Dictionary<string, string> gamemode = new() {
-            {"survival", "Supervivencia" },
-            {"creative", "Creativo"},
-            {"adventure", "Adventura"}
+            {"SURVIVAL", "Supervivencia"},
+            {"CREATIVE", "Creativo"},
+            {"ADVENTURE", "Adventura"},
+            {"SPECTATOR", "Espectador"}
         };
 
         private struct MessageData()
@@ -152,11 +153,13 @@ namespace svstatus
 
             string msg = message.Content;
 
-            if (message.Author.Id == 725129316790173767 && message.Embeds.Count != 0) {
-                if (message.Embeds.First().Fields.First().Name == "Escuchando") {
-                msg = message.Embeds.First().Fields.First().Value;
-                msg = msg[..msg.IndexOf("](http")];
-                msg = "Escuchando: " + msg;
+            if (message.Author.Id == 725129316790173767 && message.Embeds.Count != 0)
+            {
+                if (message.Embeds.FirstOrDefault().Fields.FirstOrDefault().Name == "Escuchando")
+                {
+                    msg = message.Embeds.FirstOrDefault().Fields.FirstOrDefault().Value;
+                    msg = msg[1..msg.IndexOf("](http")];
+                    msg = "Escuchando: " + msg;
                 }
             }
 
@@ -169,11 +172,28 @@ namespace svstatus
             }
             catch
             {
+                await client.ConnectAsync();
                 return;
             }
             if (authenticated)
             {
-                await client.ExecuteCommandAsync($"say [{message.Author.Username}]: {msg}");
+                try
+                {
+                    if (message.Author.Id == 725129316790173767)
+                    {
+                        await client.ExecuteCommandAsync($"tellraw @a {{\"text\":\"{msg}\",\"color\":\"green\"}}");
+                    }
+                    else
+                    {
+                        await client.ExecuteCommandAsync($"tellraw @a {{\"text\":\"[{message.Author.Username}]: {msg}\",\"color\":\"yellow\"}}");
+                    }
+                }
+                catch
+                {
+                    await client.ConnectAsync();
+
+                    return;
+                }
             }
         }
         private static async Task SlashCommandHandler(SocketSlashCommand command)
@@ -311,8 +331,6 @@ namespace svstatus
             var embedBuiler = new EmbedBuilder();
             while (true)
             {
-                Thread.Sleep(3000);
-                RconClient client = RconClient.Create(config.rconip, config.rconport);
 
                 MineStat ms = new(config.serverip, 57901);
                 if (address != config.serverip + ":" + config.serverport)
@@ -381,9 +399,9 @@ namespace svstatus
             client = RconClient.Create(config.rconip, config.rconport);
             while (true)
             {
-                Thread.Sleep(200);
                 
-                bool authenticated;
+                bool authenticated = false;
+                if (!authenticated) {
                 try
                 {
 
@@ -393,22 +411,35 @@ namespace svstatus
                 }
                 catch
                 {
-                    client = RconClient.Create(config.rconip, config.rconport);
-                    
+                   await client.ConnectAsync();
+
                     continue;
+                }
                 }
                 if (authenticated)
                 {
                     if (started == false)
                     {
                         await client.ExecuteCommandAsync("gamerule logAdminCommands false");
+                        await client.ExecuteCommandAsync("gamerule sendcommandfeedback false");
                         await client.ExecuteCommandAsync("op DualFennecFox");
                         await client.ExecuteCommandAsync("op Clover");
                         started = true;
                     }
-                    var status = await client.ExecuteCommandAsync("craftcontrolrcon players");
+                    var status = "";
 
-                    
+                    try
+                    {
+                        status = await client.ExecuteCommandAsync("craftcontrolrcon players");
+                    }
+                    catch
+                    {
+                        await client.ConnectAsync();
+                        authenticated = false;
+                        continue;
+                    }
+
+
 
                     PlayerData data = JsonConvert.DeserializeObject<PlayerData>(status.ToString());
 
@@ -458,8 +489,18 @@ namespace svstatus
                         iterable = [];
                     }
                     old = new List<Players>(data.players);
+                    var mstatus = "";
+                    try
+                    {
 
-                    var mstatus = await client.ExecuteCommandAsync($"craftcontrolrcon chat {lastmsg.timestamp - 10000}");
+                        mstatus = await client.ExecuteCommandAsync($"craftcontrolrcon chat {lastmsg.timestamp - 10000}");
+                    }
+                    catch
+                    {
+                        await client.ConnectAsync();
+                        authenticated = false;
+                        continue;
+                    }
                     if (mstatus.ToString() == "[]") { continue; }
                     MessageData mdata = JsonConvert.DeserializeObject<List<MessageData>>(mstatus.ToString()).LastOrDefault();
 
@@ -471,8 +512,23 @@ namespace svstatus
                         mdata.player = temp[1..temp.IndexOf("]:")];
                         color = Color.Orange;
                     }
-                    if (String.IsNullOrEmpty(mdata.message)) { continue; }
+                    if (string.IsNullOrEmpty(mdata.message)) { continue; }
                     if (mdata.timestamp == lastmsg.timestamp) { continue; }
+
+                    if (mdata.message == "tpspawn")
+                    {
+                        try
+                        {
+                            await client.ExecuteCommandAsync($"execute in minecraft:overworld run tp {mdata.player} 817 64 245");
+                        }
+                        catch
+                        {
+                            await client.ConnectAsync();
+                            authenticated = false;
+                            continue;
+                        }
+                    }
+
                     var msgBuiler = new EmbedBuilder()
                     .WithAuthor(mdata.player)
                     .WithDescription(mdata.message)
@@ -481,7 +537,6 @@ namespace svstatus
                     .WithCurrentTimestamp();
                     await chatchannel.SendMessageAsync(embed: msgBuiler.Build());
                     lastmsg = mdata;
-                    client.Disconnect();
                 }
             }
         }
